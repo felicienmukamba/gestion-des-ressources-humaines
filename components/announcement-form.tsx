@@ -1,0 +1,79 @@
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
+import { Loader2 } from "lucide-react";
+
+interface AnnouncementFormProps {
+  announcement?: any;
+  onSubmit: (data: any) => void;
+  onCancel: () => void;
+}
+
+export function AnnouncementForm({ announcement, onSubmit, onCancel }: AnnouncementFormProps) {
+  const [formData, setFormData] = useState({
+    titre: announcement?.titre || "",
+    contenu: announcement?.contenu || "",
+  });
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    await onSubmit(formData);
+    setIsLoading(false);
+  };
+
+  const handleChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <Card>
+        <CardContent className="pt-6">
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="titre">Titre</Label>
+              <Input
+                id="titre"
+                value={formData.titre}
+                onChange={(e) => handleChange("titre", e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="contenu">Contenu</Label>
+              <Textarea
+                id="contenu"
+                value={formData.contenu}
+                onChange={(e) => handleChange("contenu", e.target.value)}
+                required
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end gap-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Annuler
+        </Button>
+        <Button type="submit" disabled={isLoading}>
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              {announcement ? "Modification..." : "Création..."}
+            </>
+          ) : (
+            <>{announcement ? "Modifier" : "Créer"}</>
+          )}
+        </Button>
+      </div>
+    </form>
+  );
+}
