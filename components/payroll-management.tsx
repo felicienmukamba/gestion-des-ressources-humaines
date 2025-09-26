@@ -24,11 +24,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Plus, Search, MoreHorizontal, Edit, Trash2, ArrowLeft } from "lucide-react"
+import { Plus, Search, MoreHorizontal, Edit, Trash2, ArrowLeft, Eye } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { fr } from 'date-fns/locale' // Correction: Import de la locale française
 import { FicheDePaieForm } from "./payroll-form"
+import { FicheDePaieViewer } from "./FicheDePaieViewer"
 
 interface Employe {
   id: number
@@ -70,6 +71,9 @@ export function FicheDePaieManagement() {
   const [selectedFiche, setSelectedFiche] = useState<FicheDePaie | null>(null)
   const [ficheToDelete, setFicheToDelete] = useState<FicheDePaie | null>(null)
   const router = useRouter()
+
+    const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
+  const [ficheToView, setFicheToView] = useState<FicheDePaie | null>(null)
 
   useEffect(() => {
     fetchFiches()
@@ -247,27 +251,20 @@ export function FicheDePaieManagement() {
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="h-8 w-8 p-0">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </button>
+                          <button className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setSelectedFiche(fiche)
-                              setIsEditDialogOpen(true)
-                            }}
-                          >
+                          {/* AJOUT: Bouton Visualiser */}
+                          <DropdownMenuItem onClick={() => { setFicheToView(fiche); setIsViewDialogOpen(true); }}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            Visualiser
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuItem onClick={() => { setSelectedFiche(fiche); setIsEditDialogOpen(true); }}>
                             <Edit className="mr-2 h-4 w-4" />
                             Modifier
                           </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setFicheToDelete(fiche)
-                              setIsDeleteDialogOpen(true)
-                            }}
-                            className="text-destructive"
-                          >
+                          <DropdownMenuItem onClick={() => { setFicheToDelete(fiche); setIsDeleteDialogOpen(true); }} className="text-destructive">
                             <Trash2 className="mr-2 h-4 w-4" />
                             Supprimer
                           </DropdownMenuItem>
@@ -319,6 +316,19 @@ export function FicheDePaieManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+            {/* AJOUT: Modale de visualisation du PDF */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Aperçu de la Fiche de Paie</DialogTitle>
+            <DialogDescription>
+              {ficheToView ? `Fiche de paie pour ${ficheToView.employe.prenom} ${ficheToView.employe.nom}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {ficheToView && <FicheDePaieViewer fiche={ficheToView} />}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

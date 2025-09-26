@@ -1,42 +1,23 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Plus, Search, MoreHorizontal, Edit, Trash2, ArrowLeft } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { getSession } from "@/lib/session"
-import { ParticipationFormationForm } from "./training-participations-form"
+import { ParticipationForm } from "./training-participations-form"
 
-interface Utilisateur {
+// Type definitions
+interface Employee {
+  id: number
   nom: string
   prenom: string
-}
-
-interface Employe {
-  id: number
-  utilisateur: Utilisateur
 }
 
 interface Formation {
@@ -44,63 +25,61 @@ interface Formation {
   titre: string
 }
 
-interface ParticipationFormation {
+interface Participation {
   id: number
-  employe: Employe
-  formation: Formation
-  statut: string
-  resultat: string
   dateInscription: string
+  statut: "Planifié" | "En cours" | "Terminé" | "Annulé"
+  resultat: "Réussi" | "Échoué" | "En attente" | null
+  employe: Employee
+  formation: Formation
+  employeId: number
 }
 
-export function ParticipationsFormationManagement() {
-  const [participations, setParticipations] = useState<ParticipationFormation[]>([])
-  const [filteredParticipations, setFilteredParticipations] = useState<ParticipationFormation[]>([])
+interface Session {
+  role: { nomRole: string }
+  employee: { id: number }
+}
+
+export function ParticipationManagement({ session }: { session: Session }) {
+  const [participations, setParticipations] = useState<Participation[]>([])
+  const [filteredParticipations, setFilteredParticipations] = useState<Participation[]>([])
+  const [employees, setEmployees] = useState<Employee[]>([])
+  const [formations, setFormations] = useState<Formation[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoading, setIsLoading] = useState(true)
+  const [selectedParticipation, setSelectedParticipation] = useState<Participation | null>(null)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [selectedParticipation, setSelectedParticipation] = useState<ParticipationFormation | null>(null)
-  const [participationToDelete, setParticipationToDelete] = useState<ParticipationFormation | null>(null)
-  const [session, setSession] = useState<any>(null)
+  const [participationToDelete, setParticipationToDelete] = useState<Participation | null>(null)
   const router = useRouter()
 
+  const isManager = session.role.nomRole === "Admin" || session.role.nomRole === "RH"
+
   useEffect(() => {
-    const fetchSessionAndData = async () => {
-      const sessionData = await getSession()
-      setSession(sessionData)
-      if (sessionData) {
-        fetchParticipations(sessionData)
-      } else {
-        router.push("/login")
-      }
+    fetchParticipations()
+    if (isManager) {
+      fetchEmployees()
     }
-    fetchSessionAndData()
+    fetchFormations()
   }, [])
 
   useEffect(() => {
     const filtered = participations.filter(
       (p) =>
-        p.employe.utilisateur.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.employe.utilisateur.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.formation.titre.toLowerCase().includes(searchTerm.toLowerCase()),
+        p.employe.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.employe.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.formation.titre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.statut.toLowerCase().includes(searchTerm.toLowerCase()),
     )
     setFilteredParticipations(filtered)
   }, [participations, searchTerm])
 
-  const fetchParticipations = async (currentSession: any) => {
+  const fetchParticipations = async () => {
     try {
-      let url = "/api/participations-formation"
-      // Si l'utilisateur est un employé, on ne récupère que ses participations
-      if (currentSession.role.nomRole === "Employee") {
-        url += `?employeId=${currentSession.employee.id}`
-      }
-
-      const response = await fetch(url)
+      const response = await fetch("/api/training-participations")
       if (response.ok) {
-        const data = await response.json()
-        setParticipations(data)
+        setParticipations(await response.json())
       }
     } catch (error) {
       console.error("Error fetching participations:", error)
@@ -109,16 +88,33 @@ export function ParticipationsFormationManagement() {
     }
   }
 
-  const handleCreateParticipation = async (participationData: any) => {
+  const fetchEmployees = async () => {
     try {
-      const response = await fetch("/api/participations-formation", {
+      const response = await fetch("/api/employees")
+      if (response.ok) setEmployees(await response.json())
+    } catch (error) {
+      console.error("Error fetching employees:", error)
+    }
+  }
+
+  const fetchFormations = async () => {
+    try {
+      const response = await fetch("/api/trainings")
+      if (response.ok) setFormations(await response.json())
+    } catch (error) {
+      console.error("Error fetching formations:", error)
+    }
+  }
+
+  const handleCreate = async (data: any) => {
+    try {
+      const response = await fetch("/api/participations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(participationData),
+        body: JSON.stringify(data),
       })
-
       if (response.ok) {
-        await fetchParticipations(session)
+        await fetchParticipations()
         setIsCreateDialogOpen(false)
       }
     } catch (error) {
@@ -126,18 +122,16 @@ export function ParticipationsFormationManagement() {
     }
   }
 
-  const handleUpdateParticipation = async (participationData: any) => {
+  const handleUpdate = async (data: any) => {
     if (!selectedParticipation) return
-
     try {
-      const response = await fetch(`/api/participations-formation/${selectedParticipation.id}`, {
+      const response = await fetch(`/api/participations/${selectedParticipation.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(participationData),
+        body: JSON.stringify(data),
       })
-
       if (response.ok) {
-        await fetchParticipations(session)
+        await fetchParticipations()
         setIsEditDialogOpen(false)
         setSelectedParticipation(null)
       }
@@ -146,16 +140,12 @@ export function ParticipationsFormationManagement() {
     }
   }
 
-  const handleDeleteParticipation = async () => {
+  const handleDelete = async () => {
     if (!participationToDelete) return
-
     try {
-      const response = await fetch(`/api/participations-formation/${participationToDelete.id}`, {
-        method: "DELETE",
-      })
-
+      const response = await fetch(`/api/participations/${participationToDelete.id}`, { method: "DELETE" })
       if (response.ok) {
-        await fetchParticipations(session)
+        await fetchParticipations()
         setIsDeleteDialogOpen(false)
         setParticipationToDelete(null)
       }
@@ -164,16 +154,10 @@ export function ParticipationsFormationManagement() {
     }
   }
 
-  const isManagementRole = session && (session.role.nomRole === "Admin" || session.role.nomRole === "RH")
-  const isEmployeeRole = session && session.role.nomRole === "Employee"
-
-  if (!session) {
-    return null
-  }
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString("fr-FR")
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
           <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
@@ -181,41 +165,41 @@ export function ParticipationsFormationManagement() {
             Retour
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-primary">
-              {isManagementRole ? "Gestion des Participations" : "Mes Participations aux Formations"}
-            </h1>
-            <p className="text-muted-foreground">
-              {isManagementRole ? "Gérer les inscriptions et les résultats des formations" : "Consulter et s'inscrire à des formations"}
-            </p>
+            <h1 className="text-3xl font-bold text-primary">Gestion des Participations</h1>
+            <p className="text-muted-foreground">Suivre les inscriptions aux formations des employés.</p>
           </div>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
-              S'inscrire à une formation
+              {isManager ? "Nouvelle Participation" : "S'inscrire à une formation"}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-xl">
             <DialogHeader>
-              <DialogTitle>Inscription à une formation</DialogTitle>
-              <DialogDescription>Remplissez les informations pour vous inscrire</DialogDescription>
+              <DialogTitle>{isManager ? "Créer une participation" : "S'inscrire à une formation"}</DialogTitle>
             </DialogHeader>
-            <ParticipationFormationForm
-              onSubmit={handleCreateParticipation}
+            <ParticipationForm
+              session={session}
+              onSubmit={handleCreate}
               onCancel={() => setIsCreateDialogOpen(false)}
+              employees={employees}
+              formations={formations}
             />
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Search */}
       <Card className="mb-8">
-        <CardContent className="pt-6">
+        <CardHeader>
+          <CardTitle className="text-lg">Rechercher</CardTitle>
+        </CardHeader>
+        <CardContent>
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Rechercher par nom, prénom ou formation..."
+              placeholder="Rechercher par employé, formation, statut..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -224,11 +208,12 @@ export function ParticipationsFormationManagement() {
         </CardContent>
       </Card>
 
-      {/* Table */}
       <Card>
         <CardHeader>
           <CardTitle>Liste des Participations</CardTitle>
-          <CardDescription>Consultez l'historique des formations</CardDescription>
+          <CardDescription>
+            {isManager ? "Gérez toutes les inscriptions." : "Consultez vos inscriptions."}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -237,8 +222,9 @@ export function ParticipationsFormationManagement() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  {isManagementRole && <TableHead>Employé</TableHead>}
+                  {isManager && <TableHead>Employé</TableHead>}
                   <TableHead>Formation</TableHead>
+                  <TableHead>Date d'inscription</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead>Résultat</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -247,38 +233,24 @@ export function ParticipationsFormationManagement() {
               <TableBody>
                 {filteredParticipations.map((p) => (
                   <TableRow key={p.id}>
-                    {isManagementRole && (
-                      <TableCell className="font-medium">{`${p.employe.utilisateur.prenom} ${p.employe.utilisateur.nom}`}</TableCell>
-                    )}
+                    {isManager && <TableCell className="font-medium">{`${p.employe.prenom} ${p.employe.nom}`}</TableCell>}
                     <TableCell>{p.formation.titre}</TableCell>
-                    <TableCell>{p.statut}</TableCell>
-                    <TableCell>{p.resultat}</TableCell>
+                    <TableCell>{formatDate(p.dateInscription)}</TableCell>
+                    <TableCell>
+                      <Badge>{p.statut}</Badge>
+                    </TableCell>
+                    <TableCell>{p.resultat || "N/A"}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="h-8 w-8 p-0">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </button>
+                          <Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setSelectedParticipation(p)
-                              setIsEditDialogOpen(true)
-                            }}
-                          >
-                            <Edit className="mr-2 h-4 w-4" />
-                            Modifier
+                          <DropdownMenuItem onClick={() => { setSelectedParticipation(p); setIsEditDialogOpen(true) }}>
+                            <Edit className="mr-2 h-4 w-4" /> Modifier
                           </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setParticipationToDelete(p)
-                              setIsDeleteDialogOpen(true)
-                            }}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Supprimer
+                          <DropdownMenuItem onClick={() => { setParticipationToDelete(p); setIsDeleteDialogOpen(true) }} className="text-destructive">
+                            <Trash2 className="mr-2 h-4 w-4" /> Supprimer
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -291,27 +263,24 @@ export function ParticipationsFormationManagement() {
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Modifier la participation</DialogTitle>
-            <DialogDescription>Modifiez les informations de la participation</DialogDescription>
           </DialogHeader>
           {selectedParticipation && (
-            <ParticipationFormationForm
+            <ParticipationForm
+              session={session}
               participation={selectedParticipation}
-              onSubmit={handleUpdateParticipation}
-              onCancel={() => {
-                setIsEditDialogOpen(false)
-                setSelectedParticipation(null)
-              }}
+              onSubmit={handleUpdate}
+              onCancel={() => { setIsEditDialogOpen(false); setSelectedParticipation(null) }}
+              employees={employees}
+              formations={formations}
             />
           )}
         </DialogContent>
       </Dialog>
-
-      {/* Delete Confirmation Dialog */}
+      
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -322,9 +291,7 @@ export function ParticipationsFormationManagement() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setParticipationToDelete(null)}>Annuler</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteParticipation} className="bg-destructive text-destructive-foreground">
-              Supprimer
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">Supprimer</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

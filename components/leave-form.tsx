@@ -8,15 +8,18 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, Calendar } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Calendar, Loader2, Info, User, CheckCircle, XCircle } from "lucide-react"
 
+// Interfaces
 interface LeaveFormProps {
   user: AuthUser
   onSubmit: (data: any) => void
   onCancel: () => void
 }
 
+// Composant LeaveForm
 export function LeaveForm({ user, onSubmit, onCancel }: LeaveFormProps) {
   const [formData, setFormData] = useState({
     dateDebut: "",
@@ -31,37 +34,40 @@ export function LeaveForm({ user, onSubmit, onCancel }: LeaveFormProps) {
     setIsLoading(true)
     setError("")
 
-    // Validation
+    // --- Validation Front-end Améliorée ---
     const startDate = new Date(formData.dateDebut)
     const endDate = new Date(formData.dateFin)
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
+    if (!formData.dateDebut || !formData.dateFin || !formData.motif.trim()) {
+      setError("Veuillez remplir tous les champs obligatoires.")
+      setIsLoading(false)
+      return
+    }
+
     if (startDate < today) {
-      setError("La date de début ne peut pas être dans le passé")
+      setError("La date de début ne peut pas être antérieure à aujourd'hui.")
       setIsLoading(false)
       return
     }
 
     if (endDate < startDate) {
-      setError("La date de fin doit être après la date de début")
+      setError("La date de fin doit être postérieure ou égale à la date de début.")
       setIsLoading(false)
       return
     }
-
-    if (!formData.motif.trim()) {
-      setError("Le motif est obligatoire")
-      setIsLoading(false)
-      return
-    }
+    // ----------------------------------------
 
     const submitData = {
       ...formData,
-      dateDebut: new Date(formData.dateDebut).toISOString(),
-      dateFin: new Date(formData.dateFin).toISOString(),
+      dateDebut: formData.dateDebut,
+      dateFin: formData.dateFin,
+      // Vous pouvez ajouter l'ID de l'employé ici si nécessaire pour l'API, mais c'est souvent géré côté serveur avec l'AuthUser
     }
 
     await onSubmit(submitData)
+    // Note: Le parent (LeaveManagement) devrait gérer la réinitialisation/fermeture après un succès
     setIsLoading(false)
   }
 
@@ -74,7 +80,10 @@ export function LeaveForm({ user, onSubmit, onCancel }: LeaveFormProps) {
     if (formData.dateDebut && formData.dateFin) {
       const start = new Date(formData.dateDebut)
       const end = new Date(formData.dateFin)
+      
+      // Assure que la date de fin n'est pas antérieure pour éviter des nombres négatifs
       if (end >= start) {
+        // Calcule la différence en jours et ajoute 1 pour inclure la date de fin
         const diffTime = Math.abs(end.getTime() - start.getTime())
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
         return diffDays
@@ -87,21 +96,30 @@ export function LeaveForm({ user, onSubmit, onCancel }: LeaveFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Affichage d'erreur amélioré */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">{error}</div>
+        <Alert variant="destructive">
+          <XCircle className="h-4 w-4" />
+          <AlertTitle>Erreur de validation</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
+      {/* Section 1: Informations sur la période */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Informations de la demande
+          <CardTitle className="flex items-center gap-2 text-xl font-semibold">
+            <Calendar className="h-5 w-5 text-primary" />
+            Période de Congé
           </CardTitle>
+          <CardDescription>
+            Sélectionnez les dates de début et de fin de votre absence.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="dateDebut">Date de début</Label>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="dateDebut">Date de début *</Label>
               <Input
                 id="dateDebut"
                 type="date"
@@ -109,10 +127,11 @@ export function LeaveForm({ user, onSubmit, onCancel }: LeaveFormProps) {
                 onChange={(e) => handleChange("dateDebut", e.target.value)}
                 min={new Date().toISOString().split("T")[0]}
                 required
+                className="focus-visible:ring-primary"
               />
             </div>
-            <div>
-              <Label htmlFor="dateFin">Date de fin</Label>
+            <div className="space-y-2">
+              <Label htmlFor="dateFin">Date de fin *</Label>
               <Input
                 id="dateFin"
                 type="date"
@@ -120,66 +139,90 @@ export function LeaveForm({ user, onSubmit, onCancel }: LeaveFormProps) {
                 onChange={(e) => handleChange("dateFin", e.target.value)}
                 min={formData.dateDebut || new Date().toISOString().split("T")[0]}
                 required
+                className="focus-visible:ring-primary"
               />
             </div>
           </div>
 
+          {/* Affichage de la durée calculée */}
           {duration > 0 && (
-            <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-md text-sm">
-              <strong>Durée calculée:</strong> {duration} jour{duration > 1 ? "s" : ""}
-            </div>
+            <Alert className="border-l-4 border-blue-500 bg-blue-50 text-blue-800">
+              <Info className="h-4 w-4 text-blue-600" />
+              <AlertTitle className="text-blue-600">Durée estimée</AlertTitle>
+              <AlertDescription>
+                Votre demande couvre **{duration} jour{duration > 1 ? "s" : ""}**.
+              </AlertDescription>
+            </Alert>
           )}
 
-          <div>
-            <Label htmlFor="motif">Motif de la demande</Label>
+          <div className="space-y-2">
+            <Label htmlFor="motif">Motif de la demande *</Label>
             <Textarea
               id="motif"
-              placeholder="Décrivez le motif de votre demande de congé..."
+              placeholder="Ex: Vacances annuelles, congé de maladie, congé sans solde..."
               value={formData.motif}
               onChange={(e) => handleChange("motif", e.target.value)}
-              rows={4}
+              rows={5}
               required
+              className="resize-none focus-visible:ring-primary"
             />
           </div>
         </CardContent>
       </Card>
 
+      {/* Section 2: Informations du demandeur (Lecture seule) */}
       {user.employee && (
-        <Card>
+        <Card className="border-l-4 border-green-500">
           <CardHeader>
-            <CardTitle>Informations du demandeur</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <User className="h-5 w-5 text-green-600" />
+              Informations du demandeur
+            </CardTitle>
+            <CardDescription>
+              Ces informations seront incluses dans la demande.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="font-medium">Nom:</span> {user.employee.prenom} {user.employee.nom}
+          <CardContent>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+              <div className="flex flex-col">
+                <span className="font-semibold text-muted-foreground">Nom complet</span>
+                <span className="font-medium text-base">
+                  {user.employee.prenom} {user.employee.nom}
+                </span>
               </div>
-              <div>
-                <span className="font-medium">Matricule:</span> {user.employee.matricule}
+              <div className="flex flex-col">
+                <span className="font-semibold text-muted-foreground">Matricule</span>
+                <span className="font-medium text-base">{user.employee.matricule}</span>
               </div>
-              <div>
-                <span className="font-medium">Service:</span> {user.employee.service}
+              <div className="flex flex-col">
+                <span className="font-semibold text-muted-foreground">Service</span>
+                <span className="font-medium text-base">{user.employee.service}</span>
               </div>
-              <div>
-                <span className="font-medium">Poste:</span> {user.employee.poste}
+              <div className="flex flex-col">
+                <span className="font-semibold text-muted-foreground">Poste</span>
+                <span className="font-medium text-base">{user.employee.poste}</span>
               </div>
             </div>
           </CardContent>
         </Card>
       )}
 
-      <div className="flex justify-end gap-4">
-        <Button type="button" variant="outline" onClick={onCancel}>
+      {/* Boutons d'action */}
+      <div className="flex justify-end gap-3 pt-2">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
           Annuler
         </Button>
-        <Button type="submit" disabled={isLoading}>
+        <Button type="submit" disabled={isLoading || duration <= 0 || !!error} className="bg-primary hover:bg-primary/90">
           {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Envoi en cours...
             </>
           ) : (
-            "Soumettre la demande"
+            <>
+              <CheckCircle className="mr-2 h-4 w-4" />
+              Soumettre la demande
+            </>
           )}
         </Button>
       </div>

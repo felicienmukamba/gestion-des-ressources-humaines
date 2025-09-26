@@ -55,8 +55,8 @@ export function FicheDePaieForm({ fiche, onSubmit, onCancel }: FicheDePaieFormPr
       try {
         const [employeesRes, avantagesRes, primesRes] = await Promise.all([
           fetch("/api/employees"),
-          fetch("/api/avantages"),
-          fetch("/api/primes"),
+          fetch("/api/benefits"),
+          fetch("/api/bonuses"),
         ])
 
         const [employeesData, avantagesData, primesData] = await Promise.all([
@@ -66,6 +66,7 @@ export function FicheDePaieForm({ fiche, onSubmit, onCancel }: FicheDePaieFormPr
         ])
 
         setEmployees(employeesData)
+        console.log("Fetched employees:", employeesData)
         setAvantages(avantagesData)
         setPrimes(primesData)
       } catch (error) {
